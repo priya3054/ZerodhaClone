@@ -1,12 +1,91 @@
-import React from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import SocketContext from "../context/SocketContext";
+import { BorderAll } from "@mui/icons-material"; 
 
 const Funds = () => {
+  const socket = useContext(SocketContext);
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on("balance-update", (data) => {
+      setBalance(data.balance);
+    });
+    return () => {
+      socket.off("balance-update");
+    };
+  }, [socket]);
+
+  const addFunds = async () => {
+    const amount = prompt("Enter amount to add");
+
+    if (!amount || isNaN(amount) || Number(amount) <= 0) {
+      alert("Please enter a valid amount");
+      return;
+    }
+
+    try {
+      const orderRes = await fetch("http://localhost:3002/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ amount: Number(amount) }),
+      });
+
+      const order = await orderRes.json();
+
+      const options = {
+        key: "rzp_test_SFizfwdHnPINhB",
+        amount: order.amount,
+        currency: "INR",
+        name: "Zerodha Clone",
+        description: "Add Funds",
+        order_id: order.id,
+
+        handler: async function (response) {
+          const verifyRes = await fetch(
+            "http://localhost:3002/verify-payment",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                ...response,
+                amount: Number(amount),
+              }),
+            },
+          );
+
+          const result = await verifyRes.json();
+
+          if (result.status === "success") {
+            alert("Funds added successfully!");
+          } else {
+            alert("Payment verification failed");
+          }
+        },
+
+        theme: {
+          color: "#0f9d58",
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (err) {
+      console.error("Add funds error:", err);
+      alert("Something went wrong");
+    }
+  };
+
   return (
     <>
       <div className="funds">
         <p>Instant, zero-cost fund transfers with UPI </p>
-        <Link className="btn btn-green">Add funds</Link>
+        <button className="btn btn-green" onClick={addFunds}>
+          Add funds
+        </button>
         <Link className="btn btn-blue">Withdraw</Link>
       </div>
 

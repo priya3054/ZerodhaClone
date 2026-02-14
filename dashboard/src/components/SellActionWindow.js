@@ -1,21 +1,21 @@
 import React, { useState, useContext, useEffect } from "react";
 import GeneralContext from "./GeneralContext";
-import "./BuyActionWindow.css";
 import SocketContext from "../context/SocketContext";
+import "./SellActionWindow.css";
 
-const BuyActionWindow = ({ uid }) => {
+const SellActionWindow = ({ uid }) => {
   const [stockQuantity, setStockQuantity] = useState(1);
   const [stockPrice, setStockPrice] = useState(0.0);
 
-  const { closeBuyWindow } = useContext(GeneralContext);
+  const { closeSellWindow } = useContext(GeneralContext);
   const socket = useContext(SocketContext);
 
-  const handleBuyClick = () => {
+  const handleSellClick = () => {
     socket.emit("place-order", {
       name: uid,
-      qty: stockQuantity,
-      price: stockPrice,
-      mode: "BUY",
+      qty: Number(stockQuantity),
+      price: Number(stockPrice),
+      mode: "SELL",
     });
   };
 
@@ -24,17 +24,17 @@ const BuyActionWindow = ({ uid }) => {
 
     const handleOrderConfirmed = (data) => {
       if (data.status === "success") {
-        closeBuyWindow();
+        closeSellWindow();
       }
     };
 
     socket.on("order-confirmed", handleOrderConfirmed);
 
     return () => socket.off("order-confirmed", handleOrderConfirmed);
-  }, [socket, closeBuyWindow]);
+  }, [socket, closeSellWindow]);
 
   return (
-    <div className="container" id="buy-window" draggable="true">
+    <div className="container" id="sell-window" draggable="true">
       <div className="regular-order">
         <div className="inputs">
           <fieldset>
@@ -62,10 +62,10 @@ const BuyActionWindow = ({ uid }) => {
       <div className="buttons">
         <span>Margin required ₹140.65</span>
         <div>
-          <button className="btn btn-blue" onClick={handleBuyClick}>
-            Buy
+          <button className="btn btn-red" onClick={handleSellClick}>
+            Sell
           </button>
-          <button className="btn btn-grey" onClick={closeBuyWindow}>
+          <button className="btn btn-grey" onClick={closeSellWindow}>
             Cancel
           </button>
         </div>
@@ -74,4 +74,4 @@ const BuyActionWindow = ({ uid }) => {
   );
 };
 
-export default BuyActionWindow;
+export default SellActionWindow;

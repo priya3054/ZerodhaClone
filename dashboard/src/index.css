@@ -722,6 +722,8 @@ hr {
   align-items: center;
   justify-content: flex-end;
   display: none;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .actions span button {
@@ -826,6 +828,7 @@ hr {
   position: absolute;
   top: 0;
   left: 0;
+  pointer-events: none;
 }
 
 .watchlist-number ul li:hover {
@@ -840,6 +843,11 @@ hr {
 
 .action:hover {
   background-color: rgb(212, 212, 212);
+}
+
+.actions button {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 
