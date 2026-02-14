@@ -4,9 +4,17 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const passport = require("passport");
+const LocalStrategy = require("passport-local");
+const User = require("./model/UsersModel.js");
+const session = require("express-session");
+const Razorpay = require("razorpay");
+const crypto = require("crypto");
+
+const http = require("http");            
+const { Server } = require("socket.io");
 
 const { HoldingsModel } = require("./model/HoldingsModel");
-
 const { PositionsModel } = require("./model/PositionsModel");
 const { OrdersModel } = require("./model/OrdersModel");
 
@@ -14,9 +22,104 @@ const PORT = process.env.PORT || 3002;
 const uri = process.env.MONGO_URL;
 
 const app = express();
+const server = http.createServer(app);
 
-app.use(cors());
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000", 
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
 app.use(bodyParser.json());
+
+const sessionOptions = {
+  secret: "mysupersecretcode",
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
+  }
+};
+
+app.use(session(sessionOptions));
+app.use(passport.initialize());
+app.use(passport.session());
+passport.use(new LocalStrategy(User.authenticate()));
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+let priceInterval = null;
+
+async function getAllStockNames() {
+  const holdings = await HoldingsModel.find({}, "name");
+  const positions = await PositionsModel.find({}, "name");
+
+  const stockSet = new Set();
+
+  holdings.forEach((h) => stockSet.add(h.name));
+  positions.forEach((p) => stockSet.add(p.name));
+
+  return Array.from(stockSet);
+}
+
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  if (!priceInterval) {
+    console.log("Starting global live price feed...");
+
+    priceInterval = setInterval(async () => {
+      try {
+        const stocks = await getAllStockNames();
+
+        stocks.forEach((stock) => {
+          io.emit("price-update", {
+            name: stock,
+            price: (Math.random() * 1000 + 1200).toFixed(2),
+          });
+        });
+      } catch (err) {
+        console.error("Price update error:", err);
+      }
+    }, 2000); 
+  }
+
+  socket.on("place-order", async (orderData) => {
+    try {
+      const newOrder = new OrdersModel(orderData);
+      await newOrder.save();
+
+      io.emit("order-confirmed", {
+        status: "success",
+        order: newOrder,
+      });
+    } catch (error) {
+      console.error("Order save failed:", error);
+      socket.emit("order-confirmed", {
+        status: "error",
+        message: "Order failed",
+      });
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
 
 // app.get("/addHoldings", async (req, res) => {
 //   let tempHoldings = [
@@ -187,31 +290,109 @@ app.use(bodyParser.json());
 //   res.send("Done!");
 // });
 
+// app.get("/demouser", async(  req, res) => {
+//   let fakeUser = new User({
+//     email: "student@gmail.com",
+//     username: "delta-student"
+//   });
+// })
+
+//Razorpay APIs
+
+app.post("/create-order", async (req, res) => {
+  const { amount } = req.body;
+
+  try {
+    const order = await razorpay.orders.create({
+      amount: amount * 100, 
+      currency: "INR",
+      receipt: "funds_" + Date.now(),
+    });
+
+    res.json(order);
+  } catch (err) {
+    console.error("Order creation failed:", err);
+    res.status(500).json({ error: "Order creation failed" });
+  }
+});
+
+
+app.post("/verify-payment", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Login required" });
+  }
+
+  const {
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature,
+    amount,
+  } = req.body;
+
+  const body = razorpay_order_id + "|" + razorpay_payment_id;
+
+  const expectedSignature = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .update(body)
+    .digest("hex");
+
+  if (expectedSignature !== razorpay_signature) {
+    return res.status(400).json({ status: "failure" });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $inc: { balance: amount } },
+      { new: true }
+    );
+
+    io.emit("balance-update", {
+      userId: user._id,
+      balance: user.balance,
+    });
+
+    res.json({ status: "success", balance: user.balance });
+  } catch (err) {
+    res.status(500).json({ status: "error" });
+  }
+});
+
+// REST APIs
 app.get("/allHoldings", async (req, res) => {
-  let allHoldings = await HoldingsModel.find({});
+  const allHoldings = await HoldingsModel.find({});
   res.json(allHoldings);
 });
 
 app.get("/allPositions", async (req, res) => {
-  let allPositions = await PositionsModel.find({});
+  const allPositions = await PositionsModel.find({});
   res.json(allPositions);
 });
 
 app.post("/newOrder", async (req, res) => {
-  let newOrder = new OrdersModel({
+  const newOrder = new OrdersModel({
     name: req.body.name,
     qty: req.body.qty,
     price: req.body.price,
     mode: req.body.mode,
   });
 
-  newOrder.save();
+  await newOrder.save();
+
+  io.emit("order-update", {
+    message: "New order placed",
+    order: newOrder,
+  });
 
   res.send("Order saved!");
 });
 
-app.listen(PORT, () => {
-  console.log("App started!");
-  mongoose.connect(uri);
-  console.log("DB started!");
+server.listen(PORT, async () => {
+  try {
+    await mongoose.connect(uri); 
+    console.log("Server running on port", PORT);
+    console.log("MongoDB connected");
+  } catch (err) {
+    console.error("DB connection failed", err);
+  }
 });
