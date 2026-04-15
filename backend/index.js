@@ -10,6 +10,7 @@ const User = require("./model/UsersModel.js");
 const session = require("express-session");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
+const authRoutes = require("./routes/auth");
 
 const http = require("http");            
 const { Server } = require("socket.io");
@@ -26,7 +27,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000", 
+    origin: ["http://localhost:3000", "http://localhost:3001"], 
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -39,7 +40,7 @@ const razorpay = new Razorpay({
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://localhost:3001"], 
     credentials: true,
   })
 );
@@ -50,6 +51,8 @@ const sessionOptions = {
   resave: false,
   saveUninitialized: true,
   cookie: {
+    secure: false,
+    sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
     httpOnly: true,
   }
@@ -58,6 +61,7 @@ const sessionOptions = {
 app.use(session(sessionOptions));
 app.use(passport.initialize());
 app.use(passport.session());
+app.use("/auth", authRoutes);
 passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
@@ -298,6 +302,7 @@ io.on("connection", (socket) => {
 // })
 
 //Razorpay APIs
+
 
 app.post("/create-order", async (req, res) => {
   const { amount } = req.body;
