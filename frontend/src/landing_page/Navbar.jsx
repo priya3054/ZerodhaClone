@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 function Navbar() {
   return (
@@ -6,13 +7,13 @@ function Navbar() {
       <div className="container p-2">
 
         {/* LOGO */}
-        <a className="navbar-brand" href="http://localhost:3000">
+        <Link className="navbar-brand" to="/">
           <img 
             src="media/images/logo.svg"
             style={{ width: "25%" }}
             alt="Logo"
           />
-        </a>
+        </Link>
 
         {/* TOGGLER */}
         <button
@@ -28,7 +29,7 @@ function Navbar() {
 
           <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
 
-            {/* 🔴 IMPORTANT: REDIRECT TO DASHBOARD APP */}
+            {/* IMPORTANT: REDIRECT TO DASHBOARD APP */}
             <li className="nav-item">
               <button
                 className="nav-link btn"
@@ -50,19 +51,19 @@ function Navbar() {
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#about">About</a>
+              <Link className="nav-link" to="/about">About</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#product">Product</a>
+              <Link className="nav-link" to="/product">Product</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#pricing">Pricing</a>
+              <Link className="nav-link" to="/pricing">Pricing</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#support">Support</a>
+              <Link className="nav-link" to="/support">Support</Link>
             </li>
 
           </ul>
