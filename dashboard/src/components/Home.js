@@ -6,7 +6,6 @@ import TopBar from "./TopBar";
 const Home = () => {
   return (
     <>
-      <TopBar />
       <Dashboard />
     </>
   );
